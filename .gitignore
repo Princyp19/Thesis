@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+.conda/
+
+# Model checkpoints (large, regenerable via train_*.py / fit_gcm.py)
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Training / job logs
+logs/
+*.log
+*.out
+*.err
+slurm-*.out
+slurm-*.err
+
+# OS / editor
+.DS_Store

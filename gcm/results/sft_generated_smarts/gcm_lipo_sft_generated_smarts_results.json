@@ -1,0 +1,19 @@
+{
+  "experiment": "sft_generated_smarts",
+  "dataset": "lipophilicity",
+  "split": "bemis_murcko",
+  "alpha": 100.0,
+  "n_fragments": 1081,
+  "n_train": 3360,
+  "n_val": 420,
+  "n_test": 420,
+  "val_rmse": 1.168948578006655,
+  "val_r2": 0.11323261497511661,
+  "val_spearman": 0.3038587156228848,
+  "test_rmse": 1.0816619690228226,
+  "test_r2": 0.13745386322862108,
+  "test_spearman": 0.3731186942741698,
+  "coverage_val": 0.9542691053029398,
+  "coverage_test": 0.9568246055732236,
+  "avg_frags_per_mol": 19.745238095238093
+}
