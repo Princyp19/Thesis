@@ -1,0 +1,12 @@
+{
+  "frozen_experiment": "ridge_all_uncapped",
+  "frozen_alpha": 10.0,
+  "frozen_vocab_size": 23842,
+  "dataset": "lipo_smarts_generated_uncapped.jsonl",
+  "n_molecules": 826,
+  "rmse": 1.3962585459491252,
+  "r2": -0.40229587429100855,
+  "spearman": 0.6043569380374952,
+  "coverage_mean": 0.5945289315316149,
+  "avg_frags_per_mol": 380.54237288135596
+}

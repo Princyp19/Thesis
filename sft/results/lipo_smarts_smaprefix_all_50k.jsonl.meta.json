@@ -1,0 +1,14 @@
+{
+  "output": "/home/pyq02mab/Thesis/sft/results/lipo_smarts_smaprefix_all_50k.jsonl",
+  "input_csv": "/home/pyq02mab/Thesis/data/smiles_dataset/Lipophilicity.csv",
+  "checkpoint": "/home/pyq02mab/Thesis/sft/checkpoints/smaprefix_all_50k_j23015580/pi_theta_epoch010_valid0.9984_loss0.5341.pt",
+  "prefix_mode": "smarts",
+  "temperature": 0.4,
+  "top_k": 40,
+  "n_samples": 1,
+  "min_consensus": 1,
+  "max_new_tokens": 2900,
+  "n_molecules": 4200,
+  "git_commit": "affe10d",
+  "timestamp": "2026-08-01 16:59:55"
+}

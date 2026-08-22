@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "R2": 0.5674,
+    "RMSE": 0.778,
+    "MAE": 0.5917,
+    "Spearman": 0.7319
+  },
+  "head": "additive",
+  "encoder_lr": 5e-05,
+  "frozen": false,
+  "head_lr": 0.001,
+  "split": "paper",
+  "epochs": 50,
+  "input": "/home/pyq02mab/Thesis/data/gcm/Lipophilicity_smarts.jsonl",
+  "n_molecules": 4200,
+  "n_fragments": 76340,
+  "sizes": {
+    "train": 3360,
+    "val": 420,
+    "test": 420
+  }
+}

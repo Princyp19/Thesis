@@ -1,0 +1,20 @@
+{
+  "experiment": "gt_cap40",
+  "dataset": "lipophilicity",
+  "split": "bemis_murcko",
+  "alpha": 10.0,
+  "n_fragments": 7143,
+  "n_train": 3360,
+  "n_val": 420,
+  "n_test": 420,
+  "val_rmse": 1.096915962980094,
+  "val_r2": 0.219153602731061,
+  "val_spearman": 0.46532007235239115,
+  "test_rmse": 1.0965605239077907,
+  "test_r2": 0.11352921299295748,
+  "test_spearman": 0.3870481895490014,
+  "coverage_val": 0.765703933747412,
+  "coverage_test": 0.7813627819548872,
+  "avg_frags_per_mol": 39.977380952380955,
+  "renamed_from": "v2.1"
+}

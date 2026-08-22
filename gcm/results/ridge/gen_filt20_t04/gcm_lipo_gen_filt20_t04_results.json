@@ -1,0 +1,21 @@
+{
+  "experiment": "gen_filt20_t04",
+  "dataset": "lipophilicity",
+  "split": "bemis_murcko",
+  "alpha": 100.0,
+  "max_frag_atoms": 0,
+  "n_fragments": 892,
+  "n_train": 3360,
+  "n_val": 420,
+  "n_test": 420,
+  "val_rmse": 1.1466828026492855,
+  "val_r2": 0.14669263118417653,
+  "val_spearman": 0.3733639036179977,
+  "test_rmse": 1.0533107250645206,
+  "test_r2": 0.1820773659973447,
+  "test_spearman": 0.41024868131844644,
+  "coverage_val": 0.9712325330492071,
+  "coverage_test": 0.973167426327256,
+  "avg_frags_per_mol": 18.871428571428574,
+  "renamed_from": "lowtemp_lipo_old"
+}

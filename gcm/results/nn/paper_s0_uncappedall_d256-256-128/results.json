@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "R2": 0.5715,
+    "RMSE": 0.7954,
+    "MAE": 0.6209,
+    "Spearman": 0.7534
+  },
+  "head": "additive",
+  "encoder_lr": 3e-05,
+  "frozen": false,
+  "head_lr": 0.001,
+  "split": "paper",
+  "epochs": 50,
+  "input": "/home/pyq02mab/Thesis/data/gcm/Lipo_smarts_all_uncapped.jsonl",
+  "n_molecules": 4199,
+  "n_fragments": 71471,
+  "sizes": {
+    "train": 3359,
+    "val": 419,
+    "test": 421
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "R2": 0.1182,
+    "RMSE": 1.1108,
+    "MAE": 0.8734,
+    "Spearman": 0.3816
+  },
+  "head": "additive",
+  "encoder_lr": 3e-05,
+  "frozen": false,
+  "head_lr": 0.001,
+  "split": "paper",
+  "epochs": 50,
+  "input": "/home/pyq02mab/Thesis/sft/results/lipo_smarts_smaprefix_all_50k.jsonl",
+  "n_molecules": 4200,
+  "n_fragments": 60515,
+  "sizes": {
+    "train": 3360,
+    "val": 420,
+    "test": 420
+  }
+}

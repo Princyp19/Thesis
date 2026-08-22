@@ -1,0 +1,14 @@
+{
+  "output": "/home/pyq02mab/Thesis/sft/results/lipo205_T07_plain.jsonl",
+  "input_csv": "/home/pyq02mab/Thesis/data/smiles_dataset/Lipophilicity.csv",
+  "checkpoint": "/home/pyq02mab/Thesis/sft/checkpoints/lipo205_paper_j23263009/pi_theta_epoch005_valid0.9988_loss0.5812.pt",
+  "prefix_mode": "smarts",
+  "temperature": 0.7,
+  "top_k": 40,
+  "n_samples": 1,
+  "min_consensus": 1,
+  "max_new_tokens": 2900,
+  "n_molecules": 4200,
+  "git_commit": "84f2e9e",
+  "timestamp": "2026-08-13 13:20:35"
+}

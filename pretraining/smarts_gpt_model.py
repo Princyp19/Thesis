@@ -116,6 +116,32 @@ class SmartsTokenizer:
 
 
 # ============================================================================
+# SMILES TOKENIZER (SFT conditioning prefix)
+# ============================================================================
+
+# Atom-level SMILES regex (Schwaller 2019 / SMI-TED style): one token per
+# atom, bond, branch, or ring-closure. Unlike the old per-atom SMARTS-primitive
+# encoding, this preserves the full molecular graph (bonds, branches, rings) in
+# the conditioning prefix.
+SMILES_PATTERN = re.compile(
+    r'(\[[^\]]+\]'   # bracket atoms: [nH], [C@@H], [O-], [Si], ...
+    r'|Br|Cl'        # two-char organic atoms
+    r'|@@'           # chirality
+    r'|%\d{2})'      # two-digit ring closures: %10, %23
+    r'|(.)'          # everything else: B C N O S P F I b c n o s p ( ) = # - + / \ : . 0-9
+)
+
+# Namespace prefix for SMILES tokens inside the combined vocab, so an input
+# SMILES 'C' never aliases the SMARTS output token 'C'.
+SMILES_NS = '<SMI>'
+
+
+def tokenize_smiles(smiles: str):
+    """Split a SMILES string into atom-level tokens (raw, un-namespaced)."""
+    return [m.group(0) for m in SMILES_PATTERN.finditer(smiles)]
+
+
+# ============================================================================
 # DATASET
 # ============================================================================
 
@@ -184,13 +210,18 @@ class CausalSelfAttention(nn.Module):
         q, k, v = [t.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
                    for t in qkv]
 
-        scale = 1.0 / math.sqrt(self.head_dim)
-        attn = (q @ k.transpose(-2, -1)) * scale
-        attn = attn.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
-        attn = F.softmax(attn, dim=-1)
-        attn = self.attn_drop(attn)
-
-        y = (attn @ v).transpose(1, 2).contiguous().view(B, T, C)
+        # Fused SDPA: mathematically identical to the explicit
+        # (q @ k.T) -> mask -> softmax -> @ v path, but never materializes the
+        # B x n_head x T x T attention matrix, so memory is O(T) rather than
+        # O(T^2). This is what makes long max_len (>=2048) trainable at a usable
+        # batch size. The `mask` buffer is kept registered for checkpoint
+        # compatibility; is_causal=True reproduces it.
+        y = F.scaled_dot_product_attention(
+            q, k, v,
+            dropout_p=self.attn_drop.p if self.training else 0.0,
+            is_causal=True,
+        )
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
         return self.resid_drop(self.proj(y))
 
 
