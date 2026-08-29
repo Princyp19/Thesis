@@ -1,2 +1,0 @@
-total_patterns,train_size,valid_size,test_size,min_length,max_length,mean_length,duplicates_removed
-591288,473030,59129,59129,6,57,41.53227699530517,0

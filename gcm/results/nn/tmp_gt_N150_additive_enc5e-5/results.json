@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "R2": 0.5485,
+    "RMSE": 0.913,
+    "MAE": 0.7142,
+    "Spearman": 0.7402
+  },
+  "head": "additive",
+  "encoder_lr": 5e-05,
+  "frozen": false,
+  "head_lr": 0.001,
+  "split": "scaffold",
+  "epochs": 30,
+  "input": "/home/pyq02mab/Thesis/tmp_frag_sweep/gt_N150.jsonl",
+  "n_molecules": 4200,
+  "n_fragments": 64190,
+  "sizes": {
+    "train": 3297,
+    "val": 471,
+    "test": 432
+  }
+}

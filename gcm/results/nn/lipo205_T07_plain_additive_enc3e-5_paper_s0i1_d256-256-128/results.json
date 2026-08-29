@@ -1,0 +1,31 @@
+{
+  "metrics": {
+    "R2": 0.4304,
+    "RMSE": 0.8927,
+    "MAE": 0.6934,
+    "Spearman": 0.6698
+  },
+  "head": "additive",
+  "encoder_lr": 3e-05,
+  "frozen": false,
+  "head_lr": 0.001,
+  "split": "paper",
+  "split_seed": 0,
+  "init_seed": 1,
+  "head_dims": [
+    256,
+    256,
+    128
+  ],
+  "dropout": 0.1,
+  "weight_decay": 0.0001,
+  "epochs": 50,
+  "input": "/home/pyq02mab/Thesis/sft/results/lipo205_T07_plain.jsonl",
+  "n_molecules": 4200,
+  "n_fragments": 74625,
+  "sizes": {
+    "train": 3360,
+    "val": 420,
+    "test": 420
+  }
+}

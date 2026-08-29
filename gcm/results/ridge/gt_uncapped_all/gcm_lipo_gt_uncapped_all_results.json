@@ -1,0 +1,21 @@
+{
+  "experiment": "gt_uncapped_all",
+  "dataset": "lipophilicity",
+  "split": "bemis_murcko",
+  "alpha": 10.0,
+  "max_frag_atoms": 0,
+  "n_fragments": 23842,
+  "n_train": 3359,
+  "n_val": 420,
+  "n_test": 420,
+  "val_rmse": 0.8790319176020092,
+  "val_r2": 0.49854936372720315,
+  "val_spearman": 0.7182098825393499,
+  "test_rmse": 0.8480099771057437,
+  "test_r2": 0.469847104640429,
+  "test_spearman": 0.6806635981087965,
+  "coverage_val": 0.8321560019376473,
+  "coverage_test": 0.8563877618087092,
+  "avg_frags_per_mol": 169.31071428571428,
+  "renamed_from": "ridge_all_uncapped"
+}

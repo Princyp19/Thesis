@@ -1,0 +1,13 @@
+{
+  "output": "/home/pyq02mab/Thesis/sft/results/lipo_smarts_generated_uncapped.jsonl",
+  "input_csv": "/home/pyq02mab/Thesis/data/smiles_dataset/Lipophilicity.csv",
+  "checkpoint": "/home/pyq02mab/Thesis/sft/checkpoints/all20k_j22812495/pi_theta_epoch008_valid0.9974_loss0.6428.pt",
+  "temperature": 1.0,
+  "top_k": 40,
+  "n_samples": 5,
+  "min_consensus": 1,
+  "max_new_tokens": 3000,
+  "n_molecules": 4200,
+  "git_commit": "affe10d",
+  "timestamp": "2026-07-30 03:31:49"
+}

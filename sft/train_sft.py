@@ -21,9 +21,12 @@ from torch.utils.data import DataLoader, random_split
 
 sys.path.insert(0, '/home/pyq02mab/Thesis/pretraining')
 sys.path.insert(0, '/home/pyq02mab/Thesis/sft')
-from smarts_gpt_model import SmartsTokenizer, SPECIAL_TOKENS  # noqa: E402
+from smarts_gpt_model import SmartsTokenizer, SPECIAL_TOKENS, SMILES_NS, tokenize_smiles  # noqa: E402
 from sft_model import load_pretrained_for_sft  # noqa: E402
-from sft_dataset import SFTDataset, smiles_to_atom_tokens  # noqa: E402
+from sft_dataset import (  # noqa: E402
+    SFTDataset, smiles_from_record, smiles_to_prefix_tokens, build_prefix_ids, PREFIX_MODES,
+    prop_vocab, PROP_MASK,
+)
 
 try:
     from rdkit import Chem
@@ -36,6 +39,47 @@ except ImportError:
 THESIS_ROOT = '/home/pyq02mab/Thesis'
 
 
+def git_commit():
+    """Short git commit hash of the repo, or 'unknown' if unavailable."""
+    import subprocess
+    try:
+        return subprocess.check_output(
+            ['git', '-C', THESIS_ROOT, 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        return 'unknown'
+
+
+def warmup_tag(data_path):
+    """Short tag identifying a warmup dataset, e.g. sft_warmup_all_20k.jsonl -> all20k."""
+    base = os.path.basename(data_path)
+    stem = base.replace('sft_warmup_', '').replace('.jsonl', '')
+    aliases = {'filtered': 'filt20', 'v2_fixed': 'v2f40',
+               'all_20k': 'all20k', 'all_50k': 'all50k', 'v3_max80': 'v3max80'}
+    return aliases.get(stem, stem)
+
+
+def write_train_config(args, output_dir):
+    """Record what this checkpoint was trained on, next to the weights (survives log deletion)."""
+    config = {
+        'warmup_dataset': os.path.abspath(args.data),
+        'warmup_tag': warmup_tag(args.data),
+        'base_checkpoint': os.path.abspath(args.checkpoint),
+        'epochs': args.epochs,
+        'lr': args.lr,
+        'batch_size': args.batch_size,
+        'max_len': args.max_len,
+        'warmup_steps': args.warmup_steps,
+        'prefix_mode': args.prefix_mode,
+        'seed': 42,
+        'slurm_job_id': os.environ.get('SLURM_JOB_ID', 'local'),
+        'git_commit': git_commit(),
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    with open(os.path.join(output_dir, 'train_config.json'), 'w') as f:
+        json.dump(config, f, indent=2)
+
+
 def parse_args():
     p = argparse.ArgumentParser(description='Conditional SFT training for SMARTS-GPT')
     p.add_argument('--data', type=str,
@@ -45,16 +89,26 @@ def parse_args():
     p.add_argument('--vocab', type=str,
                    default=f'{THESIS_ROOT}/pretraining/checkpoints/pubchem_gpt/tokenizer.json')
     p.add_argument('--output-dir', type=str, default=f'{THESIS_ROOT}/sft/checkpoints')
-    p.add_argument('--max-len', type=int, default=256)
+    p.add_argument('--prefix-mode', type=str, default='smiles', choices=list(PREFIX_MODES),
+                   help="Conditioning-prefix representation. 'smiles' = <SMI>-namespaced "
+                        "SMILES tokens (legacy, needs a vocab extension). 'smarts' = the "
+                        "whole molecule written as SMARTS in the EXISTING fragment vocab, "
+                        "so the prefix already contains the exact atom primitives "
+                        "('[C&H2&R]') the model must emit, plus full connectivity. "
+                        "Recorded in the checkpoint; generation reads it back.")
+    p.add_argument('--prop-col', type=str, default='exp',
+                   help="Record key holding the property, used ONLY by "
+                        "--prefix-mode smarts_prop. Ignored otherwise.")
+    p.add_argument('--max-len', type=int, default=512)
     p.add_argument('--epochs', type=int, default=5)
     p.add_argument('--lr', type=float, default=1e-4)
     p.add_argument('--min-lr', type=float, default=1e-5)
     p.add_argument('--batch-size', type=int, default=256)
     p.add_argument('--val-split', type=float, default=0.05)
     p.add_argument('--valid-rate-threshold', type=float, default=0.90)
-    p.add_argument('--n-eval-samples', type=int, default=200)
+    p.add_argument('--n-eval-samples', type=int, default=50)
     p.add_argument('--warmup-steps', type=int, default=200)
-    p.add_argument('--max-new-tokens', type=int, default=150)
+    p.add_argument('--max-new-tokens', type=int, default=400)
     return p.parse_args()
 
 
@@ -70,16 +124,23 @@ def masked_ce_loss(logits, targets, loss_mask):
 
 @torch.no_grad()
 def generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
-                        max_new_tokens=120, temperature=1.0, top_k=40):
-    """Autoregressively generate a fragment set conditioned on a SMILES string."""
+                        max_new_tokens=400, temperature=1.0, top_k=40,
+                        prefix_mode='smiles', min_unique=0):
+    """Autoregressively generate a fragment set conditioned on a SMILES string.
+
+    prefix_mode must match how the checkpoint was TRAINED; generate_smarts.py
+    reads it back off the checkpoint so the two cannot drift apart.
+    """
     model.eval()
-    atom_tokens = smiles_to_atom_tokens(smiles, tokenizer)
-    if atom_tokens is None:
+    # prop is deliberately NOT passed: 'smarts_prop' falls back to <PROP>MASK.
+    # Generating with the true property present would let the model encode the
+    # answer in its fragments, which the GCM reads back -- the evaluation would
+    # measure label round-tripping rather than chemistry.
+    body = build_prefix_ids(smiles, tokenizer, prefix_mode)
+    if body is None:
         return []
 
-    prefix_ids = [SPECIAL_TOKENS['<BOS>']]
-    prefix_ids += [tokenizer.token2id.get(t, SPECIAL_TOKENS['<UNK>']) for t in atom_tokens]
-    prefix_ids += [sep_id]
+    prefix_ids = [SPECIAL_TOKENS['<BOS>']] + body + [sep_id]
 
     idx = torch.tensor([prefix_ids], dtype=torch.long, device=device)
     eos_id = SPECIAL_TOKENS['<EOS>']
@@ -87,6 +148,22 @@ def generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
     bos_id = SPECIAL_TOKENS['<BOS>']
     unk_id = SPECIAL_TOKENS['<UNK>']
 
+    # SMILES-namespace tokens are input-only; forbid the decoder from emitting
+    # them as fragment tokens.
+    smiles_ids = [i for t, i in tokenizer.token2id.items() if t.startswith(SMILES_NS)]
+    # Property tokens are input-only too; never emit them as fragment tokens.
+    smiles_ids += [i for t, i in tokenizer.token2id.items() if t.startswith('<PROP>')]
+
+    # min_unique: suppress EOS until this many DISTINCT fragments exist. Repeats are
+    # emitted normally and simply don't count (rejection sampling) -- blocking
+    # FRAG_SEP instead forces off-distribution continuations and measurably halves
+    # the natural stop (163.6 -> 67.9 emissions) while wrecking faithfulness.
+    #
+    # The real ceiling is the CONTEXT WINDOW, not this parameter: generation slides
+    # idx[:, -model.max_len:], so past ~239 emissions the molecule prefix scrolls out
+    # and the model writes blind. max_new_tokens is what enforces that -- keep it
+    # under (model.max_len - len(prefix_ids)).
+    emitted, cur_tokens = set(), []
     generated = []
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -model.max_len:]
@@ -96,11 +173,16 @@ def generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
         logits[:, pad_id] = float('-inf')
         logits[:, bos_id] = float('-inf')
         logits[:, unk_id] = float('-inf')
+        if smiles_ids:
+            logits[:, smiles_ids] = float('-inf')
 
         if top_k > 0:
             k = min(top_k, logits.size(-1))
             kth = torch.topk(logits, k)[0][:, -1, None]
             logits = logits.masked_fill(logits < kth, float('-inf'))
+
+        if min_unique > 0 and len(emitted) < min_unique:
+            logits[:, eos_id] = float('-inf')
 
         probs = F.softmax(logits, dim=-1)
         next_tok = torch.multinomial(probs, num_samples=1)
@@ -108,6 +190,12 @@ def generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
         tok_id = next_tok.item()
         if tok_id == eos_id:
             break
+        if tok_id == frag_sep_id:
+            if cur_tokens:
+                emitted.add(tuple(cur_tokens))
+            cur_tokens = []
+        else:
+            cur_tokens.append(tok_id)
         generated.append(tok_id)
         idx = torch.cat([idx, next_tok], dim=1)
 
@@ -128,14 +216,14 @@ def generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
 
 
 def evaluate_validity(model, tokenizer, sep_id, frag_sep_id, smiles_list, device, n_samples,
-                       max_new_tokens=150):
+                       max_new_tokens=400, prefix_mode='smiles'):
     if not HAS_RDKIT:
         return None
     n_valid = 0
     n_total = 0
     for smiles in smiles_list[:n_samples]:
         frags = generate_fragments(model, tokenizer, sep_id, frag_sep_id, smiles, device,
-                                    max_new_tokens=max_new_tokens)
+                                    max_new_tokens=max_new_tokens, prefix_mode=prefix_mode)
         for frag in frags:
             n_total += 1
             if Chem.MolFromSmarts(frag) is not None:
@@ -148,20 +236,52 @@ def evaluate_validity(model, tokenizer, sep_id, frag_sep_id, smiles_list, device
 def main():
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
+    write_train_config(args, args.output_dir)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Device: {device} | CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}")
+    if device == 'cpu' and os.environ.get('CUDA_VISIBLE_DEVICES'):
+        raise RuntimeError(
+            "CUDA_VISIBLE_DEVICES is set but torch.cuda.is_available() is False — "
+            "GPU allocated but not usable (bad node/driver?). Aborting instead of "
+            "silently running on CPU."
+        )
+
+    records = []
+    with open(args.data) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                records.append(json.loads(line))
+
+    # 'smarts' prefixes reuse the fragment vocab verbatim, so there is nothing to
+    # add; only the '<SMI>'-namespaced mode needs the vocab extended.
+    if args.prefix_mode == 'smiles':
+        smiles_tokens = sorted({
+            t for rec in records for t in tokenize_smiles(smiles_from_record(rec))
+        })
+        print(f"SMILES conditioning vocab: {len(smiles_tokens)} unique tokens")
+    else:
+        smiles_tokens = None
+        print("Prefix mode 'smarts': whole-molecule SMARTS prefix, no vocab extension")
+    extra_tokens = prop_vocab() if args.prefix_mode == 'smarts_prop' else None
+    if extra_tokens:
+        print(f"Prefix mode 'smarts_prop': +{len(extra_tokens)} property tokens "
+              f"(binned logD, plus {PROP_MASK} for inference)")
 
     base_tokenizer = SmartsTokenizer.load(args.vocab)
     model, tokenizer, sep_id, frag_sep_id, hparams = load_pretrained_for_sft(
-        args.checkpoint, base_tokenizer, max_len=args.max_len, device=device
+        args.checkpoint, base_tokenizer, smiles_tokens=smiles_tokens,
+        extra_tokens=extra_tokens, max_len=args.max_len, device=device
     )
     model.to(device)
     print(f"SEP_ID={sep_id}  FRAG_SEP_ID={frag_sep_id}  vocab_size={tokenizer.vocab_size}")
 
     tokenizer.save(os.path.join(args.output_dir, 'tokenizer.json'))
 
-    dataset = SFTDataset.from_jsonl(args.data, tokenizer, sep_id, frag_sep_id, max_len=args.max_len)
+    dataset = SFTDataset(records, tokenizer, sep_id, frag_sep_id, max_len=args.max_len,
+                         prefix_mode=args.prefix_mode,
+                         prop_col=args.prop_col if args.prefix_mode == 'smarts_prop' else None)
     n_val = max(200, int(len(dataset) * args.val_split))
     n_train = len(dataset) - n_val
     train_ds, val_ds = random_split(
@@ -174,11 +294,7 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
                              num_workers=4, pin_memory=True)
 
-    val_smiles = []
-    with open(args.data) as f:
-        for line in f:
-            val_smiles.append(json.loads(line)['smiles'])
-    val_smiles = val_smiles[-args.n_eval_samples:]
+    val_smiles = [smiles_from_record(rec) for rec in records[-args.n_eval_samples:]]
 
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
 
@@ -223,7 +339,7 @@ def main():
 
         val_valid_rate = evaluate_validity(
             model, tokenizer, sep_id, frag_sep_id, val_smiles, device, args.n_eval_samples,
-            max_new_tokens=args.max_new_tokens
+            max_new_tokens=args.max_new_tokens, prefix_mode=args.prefix_mode
         )
 
         dt = time.time() - t0
@@ -242,6 +358,7 @@ def main():
                 'hparams': hparams,
                 'sep_id': sep_id,
                 'frag_sep_id': frag_sep_id,
+                'prefix_mode': args.prefix_mode,
                 'tokenizer_path': os.path.join(args.output_dir, 'tokenizer.json'),
             }
 

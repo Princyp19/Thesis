@@ -250,7 +250,7 @@ def main():
     p.add_argument("--smiles-col", default="SMILES")
     p.add_argument("--max-atoms", type=int, default=5)
     p.add_argument("--min-atoms", type=int, default=2)
-    p.add_argument("--allowed-atoms", default="C,N,O,Cl,S,F,Br,I,P,Si",
+    p.add_argument("--allowed-atoms", default="C,N,O,Cl,S,F,Br,I,P,Si,B",
                    help="Comma-separated list; molecules with other atoms are skipped")
     p.add_argument("--out-prefix", default="sft_warmup")
     p.add_argument("--scaffold-split", action="store_true",
@@ -258,15 +258,19 @@ def main():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--vocab", default=None,
                    help="Path to vocab.json — filters out OOV-containing fragments")
-    p.add_argument("--max-frags", type=int, default=20,
+    p.add_argument("--max-frags", type=int,
                    help="Max fragments per molecule (cap, shortest first)")
+    p.add_argument("--sample-size", type=int, default=None,
+                   help="Randomly subsample this many molecules (seeded by --seed)")
     args = p.parse_args()
 
     df = pd.read_csv(args.csv, sep=",")
     smiles_list = df[args.smiles_col].dropna().drop_duplicates().tolist()
     print(f"Loaded {len(smiles_list)} unique SMILES from {args.csv}")
-    # import random
-    # smiles_list = random.sample(smiles_list, 100000)
+
+    if args.sample_size is not None and args.sample_size < len(df):
+        df = df.sample(n=args.sample_size, random_state=args.seed)
+        print(f"Subsampled to {len(df)} molecules (seed={args.seed})")
 
     allowed = [a.strip() for a in args.allowed_atoms.split(",")] if args.allowed_atoms else None
 
@@ -289,6 +293,7 @@ def main():
         rows, failed = build_dataset_csv(
             df=df,
             smiles_col=args.smiles_col,
+            allowed_atoms=allowed,
             output_path=f"{args.out_prefix}.jsonl",
             max_frags=args.max_frags, known_vocab=known_vocab)
 
